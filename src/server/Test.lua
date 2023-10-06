@@ -98,6 +98,7 @@ end
 function Game_:Reset()
     self:Init()
     self.IsOver = false
+    self.Winner = nil
 end
 
 function Game_:Warning()
