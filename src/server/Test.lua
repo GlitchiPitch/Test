@@ -20,13 +20,15 @@ local function iteratePlayers(action, iteratedList)
     end
 end
 
+local PLAYER_QUANTITY = 2
+
 local Game_ = {}
 
 Game_.__index = Game_
 
-function Game_.New(playerQuantity)
+function Game_.New()
     local self = setmetatable({}, Game_)
-    self.PlayerQuantity = playerQuantity
+    self.PlayerQuantity = PLAYER_QUANTITY
     self.Players = {}
     self.IsOver = false
     self.WinnerTeam = nil
