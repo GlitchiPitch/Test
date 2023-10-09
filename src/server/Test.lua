@@ -1,21 +1,46 @@
 local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local StarterPack = game:GetService("StarterPack")
 local Teams = game:GetService("Teams")
 
 -- Players.CharacterAutoLoads = false
+-- респавн и gui можно было настроить по-другому без повторной подгрузки
 
 local Crossbow = game:GetService('InsertService'):LoadAsset(4842204072).Crossbow
+Crossbow.Parent = StarterPack
 
-local redSpawn, blueSpawn = Instance.new('Part'), Instance.new('Part')
-redSpawn.Parent, blueSpawn.Parent = workspace, workspace
-redSpawn.Position, blueSpawn.Position = Vector3.new(100, 1, 0), Vector3.new(-100, 1, 0)
+local baseTemplate = game:GetService('ServerStorage'):FindFirstChild('baseTemplate')
 
 
-local TeamBasses = {redSpawn, blueSpawn}
+function SetupGui()
+    local gui, text = Instance.new('ScreenGui'), Instance.new('TextLabel')
+    gui.Name = 'MainGui'
+    text.Size, text.Position = UDim2.fromScale(.5,.5), UDim2.fromScale(.5,.5)
+    text.AnchorPoint = Vector2.new(.5,.5)
+    text.Visible = false
+    text.TextScaled = true
+    text.TextStrokeTransparency = 0
+    text.TextColor3 = Color3.new(1,1,1)
+    text.BackgroundTransparency = 1
+    gui.Parent, text.Parent = StarterGui, gui
+end
+
+SetupGui()
+
+local redBase, blueBase = baseTemplate:Clone(), baseTemplate:Clone()
+for _, o in pairs(redBase:GetChildren()) do if o:IsA('Part') then o.BrickColor = BrickColor.Red() end end
+for _, o in pairs(blueBase:GetChildren()) do if o:IsA('Part') then o.BrickColor = BrickColor.Blue() end end
+redBase.Parent, blueBase.Parent = workspace, workspace
+local _, s = redBase:GetBoundingBox()
+local _, s1 = blueBase:GetBoundingBox()
+
+redBase:PivotTo(CFrame.new(100, s.Y / 2, 0) * CFrame.Angles(0, math.rad(90), 0))
+blueBase:PivotTo(CFrame.new(-100, s1.Y / 2, 0) * CFrame.Angles(0, math.rad(-90), 0))
+
+local TeamBasses = {redBase, blueBase}
 
 local function iteratePlayers(action, iteratedList)
-    -- print('iteratePlayers')
     for i, player in pairs(iteratedList) do
-        -- print(player, ' is iterated')
         action(player, i)
     end
 end
@@ -38,7 +63,6 @@ end
 
 function Game_:CheckPlayerAdded()
     Players.PlayerAdded:Connect(function(player)
-        -- print(player, 'is on server')
         table.insert(self.Players, player)
     end)
 end
@@ -52,23 +76,16 @@ function Game_:Leaderstats(player)
     leadboard.Parent = player
 end
 
-function Game_:SetupGui(player)
-    local gui, text = Instance.new('ScreenGui'), Instance.new('TextLabel')
-    gui.Name = 'MainGui'
-    text.Size, text.Position = UDim2.fromScale(.5,.5), UDim2.fromScale(.5,.5)
-    text.AnchorPoint = Vector2.new(.5,.5)
-    text.Visible = false
-    gui.Parent, text.Parent = player.PlayerGui, gui
-end
+
 
 function Game_:SetupTeams()
-    local red, spawnPoint = Instance.new('Team'), Instance.new('ObjectValue')
+    local red, spawnPoint = Instance.new('Team'), Instance.new('Vector3Value')
     red.Name, red.Parent = 'RedTeam', Teams
     spawnPoint.Parent, spawnPoint.Name = red, 'SpawnPoint'
-    local blue, spawnPoint = Instance.new('Team'), Instance.new('ObjectValue')
+    local blue, spawnPoint = Instance.new('Team'), Instance.new('Vector3Value')
     blue.Name, blue.Parent = 'BlueTeam', Teams
     spawnPoint.Parent, spawnPoint.Name = blue, 'SpawnPoint'
-    red.SpawnPoint.Value, blue.SpawnPoint.Value = TeamBasses[1], TeamBasses[2]
+    red.SpawnPoint.Value, blue.SpawnPoint.Value = TeamBasses[1]:GetPivot().Position, TeamBasses[2]:GetPivot().Position
     red.AutoAssignable, blue.AutoAssignable = false, false
     red.TeamColor, blue.TeamColor = BrickColor.Red(), BrickColor.Blue()
 
@@ -78,9 +95,7 @@ function Game_:CheckPlayerDeath(player)
     player.Character:FindFirstChild('Humanoid').Died:Connect(function()
         player.leaderstats.Death.Value += 1
         player:LoadCharacter()
-        player.Character:MoveTo(player.Team.SpawnPoint.Value.Position)
-        local crossbow = Crossbow:Clone()
-        crossbow.Parent = player.Backpack
+        player.Character:MoveTo(player.Team.SpawnPoint.Value)
         self:CheckFinalOfGame(player)
         self:CheckPlayerDeath(player)
     end)
@@ -92,45 +107,42 @@ function Game_:CheckFinalOfGame(deathPlayer)
     local checkedTeam = deathPlayer.Team
     iteratePlayers(function(player, ...) sumOfDeath += player.leaderstats.Death.Value end, checkedTeam:GetPlayers())
     self.IsOver = sumOfDeath >= 2 and true or false
-    if self.IsOver then self.Winner = checkedTeam == TeamList[1] and TeamList[2] or TeamList[1] end
+    if self.IsOver then self.Winner = table.find(TeamList, checkedTeam, 1) == 1 and TeamList[2] or TeamList[1] end
 end
 
 function Game_:Reset()
-    self:Init()
     self.IsOver = false
     self.Winner = nil
+    self:Init()
 end
 
 function Game_:Warning()
     iteratePlayers(function(player, ...)
         local playerGui = player.PlayerGui
-        print(playerGui)
         local MainGui = playerGui:FindFirstChild('MainGui')
-        print(MainGui)
-        MainGui.TextLabel.Text = self.Winner.Name .. ' ' .. 'is Winner'
-        coroutine.wrap(function() 
-            MainGui.TextLabel.Visible = true 
-            task.wait(5) 
-            MainGui.TextLabel.Visible = false 
-        end)()    
+        if MainGui then
+            MainGui.TextLabel.Text = self.Winner.Name .. ' ' .. 'is Winner'
+            coroutine.wrap(function() 
+                MainGui.TextLabel.Visible = true 
+                task.wait(5) 
+                MainGui.TextLabel.Visible = false 
+            end)()
+        end
     end, self.Players)
 end
 
 function Game_:SetupPlayer()
 
     iteratePlayers(function(player, ...)
-        print(player, ' is setuped')
         local i = ... 
         if not player:FindFirstChild('leaderstats') then self:Leaderstats(player) else player.leaderstats.Death.Value = 0 end
-        if not player:FindFirstChild('MainGui') then self:SetupGui(player) end
-        -- coroutine.wrap(self:CheckPlayerDeath)(player)
+        local playerGui = player.PlayerGui
         player:LoadCharacter()
         self:CheckPlayerDeath(player)
-        player.Team = i % 2 == 0 and Teams.RedTeam or Teams.BlueTeam
-        player.Character:MoveTo(player.Team.SpawnPoint.Value.Position)
-        local crossbow = Crossbow:Clone()
-        crossbow.Parent = player.Backpack
-            
+        local setTeam = i % 2 == 0 and Teams.RedTeam or Teams.BlueTeam
+        local randTeam = math.random(2) == 1 and Teams.RedTeam or Teams.BlueTeam
+        player.Team = #self.Players % 2 == 0 and setTeam or (i == #self.Players and randTeam or setTeam)
+        player.Character:MoveTo(player.Team.SpawnPoint.Value)
     end, self.Players)
 end
 
@@ -140,8 +152,14 @@ function Game_:Init()
     repeat wait() until #self.Players == self.PlayerQuantity
     print('players are connected')
     if #Teams:GetTeams() == 0 then self:SetupTeams() end
+
+    wait(10)
+    print('go')
+
     self:SetupPlayer()
+    print(self.IsOver, 'before')
     repeat wait() until self.IsOver
+    print(self.IsOver, 'after')
     self:Warning()
     self:Reset()
 end
